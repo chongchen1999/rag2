@@ -1,9 +1,38 @@
 #rag_module.py
 import streamlit as st
-from models import init_models_rag
 from utils import handle_file_upload, get_files_hash
 import time
 import psutil
+from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, Settings
+from llama_index.embeddings.ollama import OllamaEmbedding
+from llama_index.llms.ollama import Ollama
+from llama_index.core.memory import ChatMemoryBuffer
+from config import *
+
+def init_models_rag(temp_dir, generation_config):
+    """Initialize RAG models with LlamaIndex."""
+    embed_model = OllamaEmbedding(model_name=EMBEDDING_MODEL)
+    Settings.embed_model = embed_model
+
+    llm = Ollama(
+        model=LLM_MODEL,
+        request_timeout=LLM_TIMEOUT,
+        num_ctx=generation_config['num_ctx'],
+        temperature=generation_config['temperature']
+    )
+    Settings.llm = llm
+
+    documents = SimpleDirectoryReader(st.session_state['temp_dir']).load_data()
+    index = VectorStoreIndex.from_documents(documents)
+
+    memory = ChatMemoryBuffer.from_defaults(token_limit=DEFAULT_TOKEN_LIMIT)
+    chat_engine = index.as_chat_engine(
+        chat_mode="context",
+        memory=memory,
+        system_prompt=DEFAULT_SYSTEM_PROMPT,
+    )
+
+    return chat_engine
 
 def handle_rag_mode(uploaded_files, generation_config):
     current_files_hash = get_files_hash(uploaded_files) if uploaded_files else None

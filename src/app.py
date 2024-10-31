@@ -6,7 +6,7 @@ from rag_module import handle_rag_mode, generate_rag_response
 from non_rag_module import handle_non_rag_mode, generate_non_rag_response
 
 def main():
-    st.title("💻 Local Chatbot 🤖")
+    st.title("💻 Enhanced Local RAG Chatbot 🤖")
     st.caption("🚀 A chatbot powered by LlamaIndex and Ollama 🦙")
 
     # Setup sidebar and get configurations

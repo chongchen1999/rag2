@@ -1,8 +1,36 @@
 #non_rag_module.py
 import time
 import streamlit as st
-from models import init_models_non_rag
 import psutil
+import subprocess
+from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, Settings
+from llama_index.embeddings.ollama import OllamaEmbedding
+from llama_index.llms.ollama import Ollama
+from llama_index.core.memory import ChatMemoryBuffer
+from config import *
+
+def init_models_non_rag():
+    """Initialize non-RAG model using Ollama directly."""
+    def run_model(prompt, context=""):
+        try:
+            full_prompt = context + "\n" + prompt if context else prompt
+            command = ["ollama", "run", LLM_MODEL]
+            process = subprocess.run(
+                command,
+                input=full_prompt,
+                text=True,
+                capture_output=True,
+                check=True
+            )
+            return process.stdout
+        except subprocess.CalledProcessError as e:
+            return f"Error running Llama: {e.stderr}"
+        except FileNotFoundError:
+            return "Error: Ollama is not installed or not in PATH"
+        except Exception as e:
+            return f"An unexpected error occurred: {str(e)}"
+
+    return run_model
 
 def handle_non_rag_mode():
     if ('chat_engine' not in st.session_state or 
