@@ -1,4 +1,3 @@
-#rag_module.py
 import streamlit as st
 from utils import handle_file_upload, get_files_hash
 import time
@@ -9,8 +8,24 @@ from llama_index.llms.ollama import Ollama
 from llama_index.core.memory import ChatMemoryBuffer
 from config import *
 
+# Cache configuration
+from collections import deque
+QUERY_CACHE_LIMIT = 10
+query_cache = deque(maxlen=QUERY_CACHE_LIMIT)
+
+def cache_response(prompt, response):
+    """Add a new query-response pair to the cache."""
+    query_cache.append({'prompt': prompt, 'response': response})
+
+def check_cache(prompt):
+    """Check if the prompt already has a cached response."""
+    for item in query_cache:
+        if item['prompt'] == prompt:
+            return item['response']
+    return None
+
 def init_models_rag(temp_dir, generation_config):
-    """Initialize RAG models with LlamaIndex."""
+    """Initialize RAG models with LlamaIndex and set retrieval parameters."""
     embed_model = OllamaEmbedding(model_name=EMBEDDING_MODEL)
     Settings.embed_model = embed_model
 
@@ -22,8 +37,13 @@ def init_models_rag(temp_dir, generation_config):
     )
     Settings.llm = llm
 
+    # Set retrieval parameters
     documents = SimpleDirectoryReader(st.session_state['temp_dir']).load_data()
-    index = VectorStoreIndex.from_documents(documents)
+    index = VectorStoreIndex.from_documents(
+        documents,
+        num_docs=generation_config.get('num_retrieved_docs', 5),       # Default number of retrieved docs
+        similarity_threshold=generation_config.get('similarity_threshold', 0.75) # Default similarity threshold
+    )
 
     memory = ChatMemoryBuffer.from_defaults(token_limit=DEFAULT_TOKEN_LIMIT)
     chat_engine = index.as_chat_engine(
@@ -65,6 +85,14 @@ def generate_rag_response(prompt):
         st.error("Please upload files first or switch to non-RAG mode.")
         st.stop()
 
+    # Check if the prompt has a cached response
+    cached_response = check_cache(prompt)
+    if cached_response:
+        st.write("Using cached response.")
+        with st.chat_message('assistant'):
+            st.markdown(cached_response)
+        return
+
     with st.chat_message('user'):
         st.markdown(prompt)
 
@@ -80,6 +108,7 @@ def generate_rag_response(prompt):
     else:
         response = chat_engine.generate_response(prompt)
 
+    # Display response while accumulating it
     with st.chat_message('assistant'):
         message_placeholder = st.empty()
         res = ''
@@ -87,6 +116,9 @@ def generate_rag_response(prompt):
             res += token
             message_placeholder.markdown(res + '▌')
         message_placeholder.markdown(res)
+
+    # Cache the new query-response pair
+    cache_response(prompt, res)
 
     # End timing and resource monitoring
     end_time = time.time()
@@ -98,7 +130,7 @@ def generate_rag_response(prompt):
 
     # Log response time and resource usage
     st.session_state.messages.append({'role': 'user', 'content': prompt})
-    st.session_state.messages.append({'role': 'assistant', 'content': response})
+    st.session_state.messages.append({'role': 'assistant', 'content': res})
     st.sidebar.write(f"Response Time (RAG): {response_time:.2f} seconds")
     st.sidebar.write(f"CPU Usage (RAG): {cpu_usage:.2f}%")
     st.sidebar.write(f"Memory Usage (RAG): {memory_usage:.2f}%")
