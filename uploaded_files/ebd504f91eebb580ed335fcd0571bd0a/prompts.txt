@@ -1,0 +1,335 @@
+# config.py
+import os
+
+# Environment configuration
+os.environ['OLLAMA_NUM_PARALLEL'] = '2'
+os.environ['OLLAMA_MAX_LOADED_MODELS'] = '2'
+
+# Default configurations
+DEFAULT_MAX_LENGTH = 1024
+DEFAULT_TEMPERATURE = 0.7
+DEFAULT_TOKEN_LIMIT = 4000
+DEFAULT_SYSTEM_PROMPT = "You are a chatbot, able to have normal interactions."
+
+# Model configurations
+EMBEDDING_MODEL = "nomic-embed-text"
+LLM_MODEL = "gemma2"
+LLM_TIMEOUT = 360.0
+
+# Supported file types
+SUPPORTED_FILE_TYPES = ["txt", "pdf", "docx"]
+
+# utils.py
+import tempfile
+import hashlib
+import os
+
+def handle_file_upload(uploaded_files):
+    """Handle file uploads and return temporary directory path."""
+    if uploaded_files:
+        temp_dir = tempfile.mkdtemp()
+        for uploaded_file in uploaded_files:
+            file_path = os.path.join(temp_dir, uploaded_file.name)
+            with open(file_path, "wb") as f:
+                f.write(uploaded_file.getvalue())
+        return temp_dir
+    return None
+
+def get_files_hash(files):
+    """Calculate MD5 hash for uploaded files."""
+    hash_md5 = hashlib.md5()
+    for file in files:
+        file_bytes = file.read()
+        hash_md5.update(file_bytes)
+        file.seek(0)  # Reset file pointer
+    return hash_md5.hexdigest()
+
+# models.py
+import streamlit as st
+import subprocess
+from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, Settings
+from llama_index.embeddings.ollama import OllamaEmbedding
+from llama_index.llms.ollama import Ollama
+from llama_index.core.memory import ChatMemoryBuffer
+from config import *
+
+def init_models_rag(temp_dir, generation_config):
+    """Initialize RAG models with LlamaIndex."""
+    embed_model = OllamaEmbedding(model_name=EMBEDDING_MODEL)
+    Settings.embed_model = embed_model
+
+    llm = Ollama(
+        model=LLM_MODEL,
+        request_timeout=LLM_TIMEOUT,
+        num_ctx=generation_config['num_ctx'],
+        temperature=generation_config['temperature']
+    )
+    Settings.llm = llm
+
+    documents = SimpleDirectoryReader(st.session_state['temp_dir']).load_data()
+    index = VectorStoreIndex.from_documents(documents)
+
+    memory = ChatMemoryBuffer.from_defaults(token_limit=DEFAULT_TOKEN_LIMIT)
+    chat_engine = index.as_chat_engine(
+        chat_mode="context",
+        memory=memory,
+        system_prompt=DEFAULT_SYSTEM_PROMPT,
+    )
+
+    return chat_engine
+
+def init_models_non_rag():
+    """Initialize non-RAG model using Ollama directly."""
+    def run_model(prompt, context=""):
+        try:
+            full_prompt = context + "\n" + prompt if context else prompt
+            command = ["ollama", "run", LLM_MODEL]
+            process = subprocess.run(
+                command,
+                input=full_prompt,
+                text=True,
+                capture_output=True,
+                check=True
+            )
+            return process.stdout
+        except subprocess.CalledProcessError as e:
+            return f"Error running Llama: {e.stderr}"
+        except FileNotFoundError:
+            return "Error: Ollama is not installed or not in PATH"
+        except Exception as e:
+            return f"An unexpected error occurred: {str(e)}"
+
+    return run_model
+
+# ui.py
+import streamlit as st
+from llama_index.core.memory import ChatMemoryBuffer
+from config import *
+
+# Setup sidebar controls and return configuration.
+def setup_sidebar():
+    with st.sidebar:
+        st.header("Chat Mode")
+        is_rag_mode = st.toggle(
+            'RAG Mode 📚', value=True, 
+            help="Toggle between RAG and non-RAG mode"
+        )
+        
+        if is_rag_mode:
+            st.header("Upload Data")
+            uploaded_files = st.file_uploader(
+                "Upload your data files:",
+                type=SUPPORTED_FILE_TYPES,
+                accept_multiple_files=True
+            )
+        else:
+            uploaded_files = None
+
+        st.header("Parameters")
+        max_length = st.slider('Max Length', min_value=8, max_value=2048, value=DEFAULT_MAX_LENGTH)
+        temperature = st.slider('Temperature', 0.0, 1.0, DEFAULT_TEMPERATURE, step=0.01)
+
+        st.header("Actions")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.button('New Chat', on_click = create_new_conversation)
+        with col2:
+            st.button('Clear History', on_click = clear_chat_history)
+
+    return is_rag_mode, uploaded_files, {'num_ctx': max_length, 'temperature': temperature}
+
+def create_new_conversation():
+    st.session_state.messages = [{"role": "assistant", "content": "Hello, I'm your assistant, how can I help you?"}]
+    if 'chat_engine' in st.session_state:
+        st.session_state.chat_engine._memory = ChatMemoryBuffer.from_defaults(token_limit = DEFAULT_TOKEN_LIMIT)
+        
+def clear_chat_history():
+    st.session_state.messages = [{"role": "assistant", "content": "Hello, I'm your assistant, how can I help you?"}]
+
+# Display chat messages from history and display chat input field at the bottom.
+def display_chat():
+    for message in st.session_state.messages:
+        with st.chat_message(message['role'], avatar=message.get('avatar')):
+            st.markdown(message['content'])
+
+    return st.chat_input("Ask a question:")
+
+#rag_module.py
+import streamlit as st
+from models import init_models_rag
+from utils import handle_file_upload, get_files_hash
+import time
+import psutil
+
+def handle_rag_mode(uploaded_files, generation_config):
+    current_files_hash = get_files_hash(uploaded_files) if uploaded_files else None
+
+    if 'files_hash' in st.session_state:
+        if st.session_state['files_hash'] != current_files_hash:
+            st.session_state['files_hash'] = current_files_hash
+            if 'chat_engine' in st.session_state:
+                del st.session_state['chat_engine']
+                st.cache_resource.clear()
+            if uploaded_files:
+                st.session_state['temp_dir'] = handle_file_upload(uploaded_files)
+                st.sidebar.success("Files uploaded successfully.")
+                if 'chat_engine' not in st.session_state:
+                    st.session_state['chat_engine'] = init_models_rag(uploaded_files, generation_config)
+            else:
+                st.sidebar.error("No uploaded files.")
+    else:
+        if uploaded_files:
+            st.session_state['files_hash'] = current_files_hash
+            st.session_state['temp_dir'] = handle_file_upload(uploaded_files)
+            st.sidebar.success("Files uploaded successfully.")
+            if 'chat_engine' not in st.session_state:
+                st.session_state['chat_engine'] = init_models_rag(uploaded_files, generation_config)
+        else:
+            st.sidebar.error("No uploaded files.")
+
+def generate_rag_response(prompt):
+    if 'chat_engine' not in st.session_state:
+        st.error("Please upload files first or switch to non-RAG mode.")
+        st.stop()
+
+    with st.chat_message('user'):
+        st.markdown(prompt)
+
+    # Start timing and resource monitoring
+    start_time = time.time()
+    start_cpu = psutil.cpu_percent()
+    start_memory = psutil.virtual_memory().percent
+
+    # Generate response
+    chat_engine = st.session_state['chat_engine']
+    if hasattr(chat_engine, 'stream_chat'):
+        response = chat_engine.stream_chat(prompt)
+    else:
+        response = chat_engine.generate_response(prompt)
+
+    # End timing and resource monitoring
+    end_time = time.time()
+    end_cpu = psutil.cpu_percent()
+    end_memory = psutil.virtual_memory().percent
+    response_time = end_time - start_time
+    cpu_usage = end_cpu - start_cpu
+    memory_usage = end_memory - start_memory
+
+    with st.chat_message('assistant'):
+        message_placeholder = st.empty()
+        res = ''
+        for token in response.response_gen:
+            res += token
+            message_placeholder.markdown(res + '▌')
+        message_placeholder.markdown(res)
+
+    # Log response time and resource usage
+    st.session_state.messages.append({'role': 'user', 'content': prompt})
+    st.session_state.messages.append({'role': 'assistant', 'content': response})
+    st.sidebar.write(f"Response Time (RAG): {response_time:.2f} seconds")
+    st.sidebar.write(f"CPU Usage (RAG): {cpu_usage:.2f}%")
+    st.sidebar.write(f"Memory Usage (RAG): {memory_usage:.2f}%")
+    
+
+#non_rag_module.py
+import time
+import streamlit as st
+from models import init_models_non_rag
+import psutil
+
+def handle_non_rag_mode():
+    if ('chat_engine' not in st.session_state or 
+        'current_mode' not in st.session_state or 
+        st.session_state['current_mode'] != 'non-rag'):
+        st.session_state['chat_engine'] = init_models_non_rag()
+        st.session_state['current_mode'] = 'non-rag'
+
+def generate_non_rag_response(prompt):
+    with st.chat_message('user'):
+        st.markdown(prompt)
+
+    # Start timing and resource monitoring
+    start_time = time.time()
+    start_cpu = psutil.cpu_percent()
+    start_memory = psutil.virtual_memory().percent
+
+    # Fetch context for multi-turn conversation
+    context = "\n".join([msg['content'] for msg in st.session_state.messages if msg['role'] == 'assistant'])
+
+    # Generate response
+    response = st.session_state['chat_engine'](prompt, context)
+
+    # End timing and resource monitoring
+    end_time = time.time()
+    end_cpu = psutil.cpu_percent()
+    end_memory = psutil.virtual_memory().percent
+    response_time = end_time - start_time
+    cpu_usage = end_cpu - start_cpu
+    memory_usage = end_memory - start_memory
+
+    with st.chat_message('assistant'):
+        st.markdown(response)
+
+    # Log response time and resource usage
+    st.session_state.messages.append({'role': 'user', 'content': prompt})
+    st.session_state.messages.append({'role': 'assistant', 'content': response})
+    st.sidebar.write(f"Response Time (Non-RAG): {response_time:.2f} seconds")
+    st.sidebar.write(f"CPU Usage (Non-RAG): {cpu_usage:.2f}%")
+    st.sidebar.write(f"Memory Usage (Non-RAG): {memory_usage:.2f}%")
+
+
+# app.py
+import streamlit as st
+from ui import setup_sidebar, display_chat
+from config import *
+from rag_module import handle_rag_mode, generate_rag_response
+from non_rag_module import handle_non_rag_mode, generate_non_rag_response
+
+def main():
+    st.title("💻 Local Chatbot 🤖")
+    st.caption("🚀 A chatbot powered by LlamaIndex and Ollama 🦙")
+
+    # Setup sidebar and get configurations
+    is_rag_mode, uploaded_files, generation_config = setup_sidebar()
+
+    # Initialize chat history
+    if 'messages' not in st.session_state:
+        st.session_state.messages = [{"role": "assistant", "content": "Hello, I'm your assistant, how can I help you?"}]
+
+    # Handle RAG or non-RAG mode based on user selection
+    if is_rag_mode:
+        handle_rag_mode(uploaded_files, generation_config)
+    else:
+        handle_non_rag_mode()
+
+    # Handle chat interaction
+    prompt = display_chat()
+    if prompt:
+        if is_rag_mode:
+            generate_rag_response(prompt)
+        else:
+            generate_non_rag_response(prompt)
+
+if __name__ == "__main__":
+    main()
+
+
+
+Based on the above code, write a report, that includes these parts:
+RAG System Implementation and Integration (30%)
+– Successful setup and modification of RAG system with local LLMs.
+– System functionality on local machine.
+– Integration with existing interface, including switching mechanism.
+– Code quality and organization.
+• Comparative Analysis and Reflection (25%)
+– Quality and diversity of test queries (at least 10).
+– Thoroughness of response comparison and performance analysis.
+- Analyze differences in response times and resource usage.
+– Insight in 500-word reflection on RAG system capabilities.
+– Documentation of implementation process, challenges, and solutions.
+User Experience and Functionality (10%)
+– Usability of the RAG-enhanced chatbot.
+– Proper error handling and performance.
+– Additional RAG-specific features or innovations.
+
+You should provide me a latex-format code.
