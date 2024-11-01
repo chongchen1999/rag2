@@ -1,6 +1,7 @@
 import streamlit as st
 from utils import handle_file_upload, get_files_hash
 import time
+import GPUtil
 import psutil
 from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, Settings
 from llama_index.embeddings.ollama import OllamaEmbedding
@@ -12,7 +13,7 @@ from cache_module import check_cache
 from retrieval_module import add_retrieval_controls
 from retrieval_module import format_source_info
 from feedback_module import collect_user_feedback
-from performance_module import display_response_metrics
+from performance_module import ResourceMonitor
 
 def init_models_rag(temp_dir, generation_config):
     """Initialize RAG models with LlamaIndex and set retrieval parameters."""
@@ -113,11 +114,9 @@ def generate_rag_response(prompt):
     # Initialize progress tracking
     progress_bar = st.progress(0)
     status_text = st.empty()
-    
-    # Start timing and resource monitoring
-    start_time = time.time()
-    start_cpu = psutil.cpu_percent()
-    start_memory = psutil.virtual_memory().percent
+
+    monitor = ResourceMonitor()
+    monitor.start_monitoring()
 
     # Generate response with progress updates
     chat_engine = st.session_state['chat_engine']
@@ -171,20 +170,11 @@ def generate_rag_response(prompt):
     time.sleep(0.5)  # Brief pause to show completion
     status_text.empty()
     progress_bar.empty()
-
-    # Calculate and display metrics
-    end_time = time.time()
-    end_cpu = psutil.cpu_percent()
-    end_memory = psutil.virtual_memory().percent
     
-    response_time = end_time - start_time
-    cpu_usage = end_cpu - start_cpu
-    memory_usage = end_memory - start_memory
+    monitor.stop_monitoring()
 
-    # Display metrics and collect feedback
-    display_response_metrics(response_time, cpu_usage, memory_usage)
     collect_user_feedback(response_id)
-
+    
     # Cache the response
     cache_response(prompt, res, source_text if source_nodes else None, current_params)
 
