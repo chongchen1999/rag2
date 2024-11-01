@@ -1,3 +1,5 @@
+#cache_module.py
+
 # Cache configuration
 from collections import deque
 QUERY_CACHE_LIMIT = 10

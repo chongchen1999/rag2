@@ -1,4 +1,6 @@
 import streamlit as st
+from config import *
+
 def add_retrieval_controls():
     """Add sidebar controls for adjusting retrieval parameters."""
     st.sidebar.markdown("### Retrieval Parameters")
@@ -7,7 +9,7 @@ def add_retrieval_controls():
         "Number of Retrieved Documents",
         min_value=1,
         max_value=10,
-        value=5,
+        value=DEFAULT_NUM_DOCS,
         help="Adjust how many documents to retrieve for each query. More documents may provide more context but could introduce noise."
     )
     
@@ -15,7 +17,7 @@ def add_retrieval_controls():
         "Similarity Threshold",
         min_value=0.0,
         max_value=1.0,
-        value=0.75,
+        value=DEFAULT_SIMILARITY_THRESHOLD,
         step=0.05,
         help="Set the minimum similarity score for retrieved documents. Higher values mean stricter matching."
     )
@@ -23,7 +25,7 @@ def add_retrieval_controls():
     st.sidebar.markdown("---")
     if st.sidebar.button("Reset Parameters"):
         st.session_state['num_docs'] = 5
-        st.session_state['similarity_threshold'] = 0.75
+        st.session_state['similarity_threshold'] = DEFAULT_SIMILARITY_THRESHOLD
         # Force reinitialization of the chat engine
         if 'chat_engine' in st.session_state:
             del st.session_state['chat_engine']

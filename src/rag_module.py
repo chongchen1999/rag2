@@ -1,8 +1,6 @@
 import streamlit as st
 from utils import handle_file_upload, get_files_hash
 import time
-import GPUtil
-import psutil
 from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, Settings
 from llama_index.embeddings.ollama import OllamaEmbedding
 from llama_index.llms.ollama import Ollama
@@ -170,7 +168,7 @@ def generate_rag_response(prompt):
     time.sleep(0.5)  # Brief pause to show completion
     status_text.empty()
     progress_bar.empty()
-    
+
     monitor.stop_monitoring()
 
     collect_user_feedback(response_id)
