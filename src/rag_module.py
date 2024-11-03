@@ -109,73 +109,72 @@ def generate_rag_response(prompt):
     # Create a unique response ID
     response_id = f"{int(time.time())}_{hash(prompt)}"
 
-    # Initialize progress tracking
+    # Initialize progress tracking with custom steps and icons
     progress_bar = st.progress(0)
     status_text = st.empty()
-
-    monitor = ResourceMonitor()
-    monitor.start_monitoring()
-
-    # Generate response with progress updates
-    chat_engine = st.session_state['chat_engine']
     
+    # monitor = ResourceMonitor()
+    # monitor.start_monitoring()
+
+    # Generate response with more detailed progress updates
+    chat_engine = st.session_state['chat_engine']
+
     with st.chat_message('assistant'):
         message_placeholder = st.empty()
         res = ''
-        
-        # Update progress for different stages
-        status_text.text("🔍 Retrieving relevant documents...")
-        progress_bar.progress(0.2)
-        
-        status_text.text("💭 Generating response...")
-        progress_bar.progress(0.4)
-        
-        if hasattr(chat_engine, 'stream_chat'):
-            response = chat_engine.stream_chat(prompt)
-            
-            # Stream response with progress updates
-            for i, token in enumerate(response.response_gen):
-                res += token
-                message_placeholder.markdown(res + '▌')
-                # Update progress based on token generation
-                progress = min(0.4 + (i / 100) * 0.4, 0.8)  # Cap at 80%
-                progress_bar.progress(progress)
-        else:
-            response = chat_engine.generate_response(prompt)
-            res = response.response
-            message_placeholder.markdown(res)
-            progress_bar.progress(0.8)
 
-        # Extract and display source information
-        status_text.text("📑 Processing source references...")
-        progress_bar.progress(0.9)
-        
+        # Define stages with icons and progress percentages
+        stages = [
+            ("🔍 Retrieving relevant documents...", 0.2),
+            ("💭 Generating response...", 0.4),
+            ("📑 Processing source references...", 0.9),
+            ("✅ Response complete!", 1.0),
+        ]
+
+        # Iterate through stages, updating status text and progress bar
+        for i, (status, progress) in enumerate(stages):
+            status_text.text(status)
+            progress_bar.progress(progress)
+            if i == 1:  # Generate response during the response generation stage
+                if hasattr(chat_engine, 'stream_chat'):
+                    response = chat_engine.stream_chat(prompt)
+                    # Stream response with progress updates
+                    for i, token in enumerate(response.response_gen):
+                        res += token
+                        message_placeholder.markdown(res + '▌')
+                        # Dynamically update progress within this stage
+                        progress_bar.progress(min(progress + (i / 100) * 0.4, 0.8))
+                else:
+                    response = chat_engine.generate_response(prompt)
+                    res = response.response
+                    message_placeholder.markdown(res)
+                    progress_bar.progress(0.8)
+
+        # Display source information after generation
         source_nodes = response.source_nodes if hasattr(response, 'source_nodes') else []
         if source_nodes:
             with st.expander("📚 Source References"):
                 similarity_scores = [node.score for node in source_nodes if hasattr(node, 'score')]
                 source_text = format_source_info(source_nodes, similarity_scores if similarity_scores else None)
                 st.markdown(source_text)
-                
+
                 st.markdown("---")
                 st.markdown("**Current Retrieval Parameters:**")
                 st.markdown(f"- Number of documents: {current_params['num_docs']}")
                 st.markdown(f"- Similarity threshold: {current_params['similarity_threshold']}")
 
-    # Finalize progress
-    progress_bar.progress(1.0)
-    status_text.text("✅ Response complete!")
-    time.sleep(0.5)  # Brief pause to show completion
-    status_text.empty()
-    progress_bar.empty()
+        # Finalize progress and clear placeholders
+        status_text.text("✅ Response complete!")
+        time.sleep(2)  # Brief pause to show completion
+        status_text.empty()
+        progress_bar.empty()
 
-    monitor.stop_monitoring()
+        # monitor.stop_monitoring()
 
-    collect_user_feedback(response_id)
-    
-    # Cache the response
-    cache_response(prompt, res, source_text if source_nodes else None, current_params)
+        # Collect user feedback and cache response
+        collect_user_feedback(response_id)
+        cache_response(prompt, res, source_text if source_nodes else None, current_params)
 
-    # Update session state
-    st.session_state.messages.append({'role': 'user', 'content': prompt})
-    st.session_state.messages.append({'role': 'assistant', 'content': res})
+        # Update session state messages
+        st.session_state.messages.append({'role': 'user', 'content': prompt})
+        st.session_state.messages.append({'role': 'assistant', 'content': res})

@@ -1,5 +1,3 @@
-#feedback_module.py
-
 import time
 from datetime import datetime
 import json
@@ -22,35 +20,70 @@ def save_feedback_data(feedback_data):
         json.dump(feedback_data, f, indent=4)
 
 def collect_user_feedback(response_id):
-    """Collect and store user feedback on response quality."""
+    """Collect and store user feedback on response quality using star rating."""
     feedback_data = load_feedback_data()
-    
+
     st.markdown("### How was this response?")
+
+    # Initialize session state variables if they don't exist
+    if 'rating' not in st.session_state:
+        st.session_state.rating = 0
+    if 'show_additional_feedback' not in st.session_state:
+        st.session_state.show_additional_feedback = False
+    if 'feedback_text' not in st.session_state:
+        st.session_state.feedback_text = ""
+
     col1, col2, col3 = st.columns([1, 2, 1])
-    
+
     with col2:
-        rating = st.slider("Rate the response quality (1-5)", 1, 5, 3)
-        feedback_text = st.text_area("Additional feedback (optional)")
-        
+        # Create star rating using radio buttons instead of individual buttons
+        st.session_state.rating = st.radio(
+            "Rate this response:",
+            options=[0, 1, 2, 3, 4, 5],
+            index=st.session_state.rating,
+            format_func=lambda x: "☆" * (5 - x) + "⭐" * x,
+            key="star_rating"
+        )
+
+        # Button to toggle additional feedback
+        if st.button("Add detailed feedback" if not st.session_state.show_additional_feedback else "Hide detailed feedback"):
+            st.session_state.show_additional_feedback = not st.session_state.show_additional_feedback
+
+        # Show text area if button is clicked
+        if st.session_state.show_additional_feedback:
+            st.session_state.feedback_text = st.text_area(
+                "Additional feedback",
+                value=st.session_state.feedback_text,
+                key="feedback_input"
+            )
+
+        # Submit button
         if st.button("Submit Feedback"):
-            timestamp = datetime.now().isoformat()
-            feedback_data[response_id] = {
-                "rating": rating,
-                "feedback": feedback_text,
-                "timestamp": timestamp,
-                "retrieval_params": {
-                    "num_docs": st.session_state.get('num_docs', None),
-                    "similarity_threshold": st.session_state.get('similarity_threshold', None)
+            if st.session_state.rating > 0:  # Ensure rating is provided
+                timestamp = datetime.now().isoformat()
+                feedback_data[response_id] = {
+                    "rating": st.session_state.rating,
+                    "feedback": st.session_state.feedback_text,
+                    "timestamp": timestamp,
+                    "retrieval_params": {
+                        "num_docs": st.session_state.get('num_docs', None),
+                        "similarity_threshold": st.session_state.get('similarity_threshold', None)
+                    }
                 }
-            }
-            save_feedback_data(feedback_data)
-            
-            # Display a temporary success message
-            st.session_state['show_success'] = True
+                save_feedback_data(feedback_data)
+
+                # Reset state and show success message
+                st.session_state.rating = 0
+                st.session_state.feedback_text = ""
+                st.session_state.show_additional_feedback = False
+                st.session_state['show_success'] = True
+                st.experimental_rerun()
+            else:
+                st.warning("Please provide a rating before submitting.")
+
+        # Show success message if feedback was submitted
+        if 'show_success' in st.session_state and st.session_state['show_success']:
+            st.success("Thank you for your feedback!")
+            time.sleep(2)
+            st.session_state['show_success'] = False
             st.experimental_rerun()
-    
-    if 'show_success' in st.session_state and st.session_state['show_success']:
-        st.success("Thank you for your feedback!")
-        time.sleep(3)
-        st.session_state['show_success'] = False
-        st.experimental_rerun()
