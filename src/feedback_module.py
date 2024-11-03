@@ -33,7 +33,6 @@ def collect_user_feedback(response_id):
     
     # Create a Streamlit form for feedback collection
     with st.form(key=f"feedback_form_{response_id}"):
-        print("here")
         st.write("Rate the quality of the answer:")
         rating = st.slider("Rating", min_value=1, max_value=5, key=f"rating_{response_id}")
         literal_feedback = st.text_area("Optional: Provide additional feedback", key=f"literal_feedback_{response_id}")

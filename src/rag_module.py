@@ -1,3 +1,4 @@
+#rag_module.py
 import streamlit as st
 from utils import handle_file_upload, get_files_hash
 import time
