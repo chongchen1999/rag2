@@ -1,1 +1,14 @@
-{}
+{
+    "response_1": {
+        "rating": 4,
+        "literal_feedback": "Good answer, but could use more details."
+    },
+    "response_2": {
+        "rating": 5,
+        "literal_feedback": "Excellent and very thorough response!"
+    },
+    "response_3": {
+        "rating": 3,
+        "literal_feedback": "The response was okay, but I was looking for something else."
+    }
+}

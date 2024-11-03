@@ -101,6 +101,8 @@ def generate_rag_response(prompt):
             if cached_sources:
                 with st.expander("📚 Source References"):
                     st.markdown(cached_sources)
+        # Collect feedback for cached responses too
+        collect_user_feedback(response_id=f"cached_{hash(prompt)}")
         return
 
     with st.chat_message('user'):
@@ -109,20 +111,19 @@ def generate_rag_response(prompt):
     # Create a unique response ID
     response_id = f"{int(time.time())}_{hash(prompt)}"
 
-    # Initialize progress tracking with custom steps and icons
+    # Initialize progress tracking
     progress_bar = st.progress(0)
     status_text = st.empty()
-    
-    # monitor = ResourceMonitor()
-    # monitor.start_monitoring()
 
-    # Generate response with more detailed progress updates
+    monitor = ResourceMonitor()
+    monitor.start_monitoring()
+
     chat_engine = st.session_state['chat_engine']
 
     with st.chat_message('assistant'):
         message_placeholder = st.empty()
         res = ''
-
+        
         # Define stages with icons and progress percentages
         stages = [
             ("🔍 Retrieving relevant documents...", 0.2),
@@ -138,11 +139,9 @@ def generate_rag_response(prompt):
             if i == 1:  # Generate response during the response generation stage
                 if hasattr(chat_engine, 'stream_chat'):
                     response = chat_engine.stream_chat(prompt)
-                    # Stream response with progress updates
                     for i, token in enumerate(response.response_gen):
                         res += token
                         message_placeholder.markdown(res + '▌')
-                        # Dynamically update progress within this stage
                         progress_bar.progress(min(progress + (i / 100) * 0.4, 0.8))
                 else:
                     response = chat_engine.generate_response(prompt)
@@ -152,6 +151,7 @@ def generate_rag_response(prompt):
 
         # Display source information after generation
         source_nodes = response.source_nodes if hasattr(response, 'source_nodes') else []
+        source_text = None
         if source_nodes:
             with st.expander("📚 Source References"):
                 similarity_scores = [node.score for node in source_nodes if hasattr(node, 'score')]
@@ -163,18 +163,21 @@ def generate_rag_response(prompt):
                 st.markdown(f"- Number of documents: {current_params['num_docs']}")
                 st.markdown(f"- Similarity threshold: {current_params['similarity_threshold']}")
 
-        # Finalize progress and clear placeholders
-        status_text.text("✅ Response complete!")
-        time.sleep(2)  # Brief pause to show completion
-        status_text.empty()
-        progress_bar.empty()
+    # Finalize progress and clear placeholders
+    status_text.text("✅ Response complete!")
+    time.sleep(2)  # Brief pause to show completion
+    status_text.empty()
+    progress_bar.empty()
 
-        # monitor.stop_monitoring()
+    monitor.stop_monitoring()
 
-        # Collect user feedback and cache response
-        collect_user_feedback(response_id)
-        cache_response(prompt, res, source_text if source_nodes else None, current_params)
+    # Collect user feedback and cache response
+    collect_user_feedback(response_id)
+    print("Response generated, feedback collected")
 
-        # Update session state messages
-        st.session_state.messages.append({'role': 'user', 'content': prompt})
-        st.session_state.messages.append({'role': 'assistant', 'content': res})
+    cache_response(prompt, res, source_text if source_nodes else None, current_params)
+    print("Response cached.")
+
+    # Update session state messages
+    st.session_state.messages.append({'role': 'user', 'content': prompt})
+    st.session_state.messages.append({'role': 'assistant', 'content': res})

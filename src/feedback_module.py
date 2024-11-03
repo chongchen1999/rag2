@@ -1,89 +1,55 @@
-import time
-from datetime import datetime
 import json
 import os
 import streamlit as st
 
 # Feedback storage configuration
-FEEDBACK_FILE = "../data/feedback_data.json"
+FEEDBACK_FILE = "../data/feedback_data.json"  # Change this to an absolute path
 
 def load_feedback_data():
-    """Load existing feedback data from file."""
+    """Load feedback data from the feedback file, or initialize if it doesn't exist or is invalid."""
     if os.path.exists(FEEDBACK_FILE):
-        with open(FEEDBACK_FILE, 'r') as f:
-            return json.load(f)
-    return {}
+        try:
+            with open(FEEDBACK_FILE, 'r') as file:
+                feedback_data = json.load(file)
+        except json.JSONDecodeError:
+            # If the file is empty or invalid, initialize an empty dictionary
+            feedback_data = {}
+    else:
+        feedback_data = {}
+    
+    return feedback_data
 
 def save_feedback_data(feedback_data):
-    """Save feedback data to file."""
-    with open(FEEDBACK_FILE, 'w') as f:
-        json.dump(feedback_data, f, indent=4)
+    """Save feedback data to the JSON file."""
+    try:
+        with open(FEEDBACK_FILE, 'w') as file:
+            json.dump(feedback_data, file, indent=4)
+    except Exception as e:
+        st.error(f"An error occurred while saving feedback data: {e}")
 
 def collect_user_feedback(response_id):
-    """Collect and store user feedback on response quality using star rating."""
+    """Collect user feedback for a given response ID."""
     feedback_data = load_feedback_data()
+    
+    # Create a Streamlit form for feedback collection
+    with st.form(key=f"feedback_form_{response_id}"):
+        print("here")
+        st.write("Rate the quality of the answer:")
+        rating = st.slider("Rating", min_value=1, max_value=5, key=f"rating_{response_id}")
+        literal_feedback = st.text_area("Optional: Provide additional feedback", key=f"literal_feedback_{response_id}")
+        
+        if st.form_submit_button("Submit Feedback"):
+            # Store the feedback in the feedback data dictionary
+            feedback_data[response_id] = {
+                "rating": rating,
+                "literal_feedback": literal_feedback
+            }
 
-    st.markdown("### How was this response?")
-
-    # Initialize session state variables if they don't exist
-    if 'rating' not in st.session_state:
-        st.session_state.rating = 0
-    if 'show_additional_feedback' not in st.session_state:
-        st.session_state.show_additional_feedback = False
-    if 'feedback_text' not in st.session_state:
-        st.session_state.feedback_text = ""
-
-    col1, col2, col3 = st.columns([1, 2, 1])
-
-    with col2:
-        # Create star rating using radio buttons instead of individual buttons
-        st.session_state.rating = st.radio(
-            "Rate this response:",
-            options=[0, 1, 2, 3, 4, 5],
-            index=st.session_state.rating,
-            format_func=lambda x: "☆" * (5 - x) + "⭐" * x,
-            key="star_rating"
-        )
-
-        # Button to toggle additional feedback
-        if st.button("Add detailed feedback" if not st.session_state.show_additional_feedback else "Hide detailed feedback"):
-            st.session_state.show_additional_feedback = not st.session_state.show_additional_feedback
-
-        # Show text area if button is clicked
-        if st.session_state.show_additional_feedback:
-            st.session_state.feedback_text = st.text_area(
-                "Additional feedback",
-                value=st.session_state.feedback_text,
-                key="feedback_input"
-            )
-
-        # Submit button
-        if st.button("Submit Feedback"):
-            if st.session_state.rating > 0:  # Ensure rating is provided
-                timestamp = datetime.now().isoformat()
-                feedback_data[response_id] = {
-                    "rating": st.session_state.rating,
-                    "feedback": st.session_state.feedback_text,
-                    "timestamp": timestamp,
-                    "retrieval_params": {
-                        "num_docs": st.session_state.get('num_docs', None),
-                        "similarity_threshold": st.session_state.get('similarity_threshold', None)
-                    }
-                }
-                save_feedback_data(feedback_data)
-
-                # Reset state and show success message
-                st.session_state.rating = 0
-                st.session_state.feedback_text = ""
-                st.session_state.show_additional_feedback = False
-                st.session_state['show_success'] = True
-                st.experimental_rerun()
-            else:
-                st.warning("Please provide a rating before submitting.")
-
-        # Show success message if feedback was submitted
-        if 'show_success' in st.session_state and st.session_state['show_success']:
+            print(feedback_data)
+            save_feedback_data(feedback_data)
+            print("saved feedback")
             st.success("Thank you for your feedback!")
-            time.sleep(2)
-            st.session_state['show_success'] = False
-            st.experimental_rerun()
+
+# Usage example
+response_id = "response_1"  # This would typically be generated dynamically
+collect_user_feedback(response_id)
