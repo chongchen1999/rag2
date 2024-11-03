@@ -45,6 +45,10 @@ An advanced chatbot system implementing Retrieval-Augmented Generation (RAG) wit
 
 ## Performance Analysis
 
+### Chat history
+  - Base Model: data/answers/llama3 only
+  - RAG System: data/answers/rag
+
 ### Base Model vs. RAG System Comparison
 - **Response Time:**
   - Base Model: ~15.32s average
@@ -63,10 +67,7 @@ An advanced chatbot system implementing Retrieval-Augmented Generation (RAG) wit
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/enhanced-rag-chatbot.git
-
-# Navigate to project directory
-cd enhanced-rag-chatbot
+git clone git@github.com:chongchen1999/rag2.git
 
 # Install required packages
 pip install -r requirements.txt
@@ -117,15 +118,5 @@ OLLAMA_MAX_LOADED_MODELS=2
 - Improved feedback analysis system
 - Domain-specific model fine-tuning
 
-## License
-This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.
-
-## Acknowledgments
-- LlamaIndex team for the vector store implementation
-- Streamlit for the UI framework
-- Anthropic and Google for the LLM models
-
-## Contact
-Your Name - [@yourusername](https://github.com/yourusername)
-
-Project Link: [https://github.com/yourusername/enhanced-rag-chatbot](https://github.com/yourusername/enhanced-rag-chatbot)
+## Video Link
+https://www.youtube.com/watch?v=Hox7VcMog6o
