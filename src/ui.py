@@ -1,15 +1,22 @@
 # ui.py
 import streamlit as st
-from llama_index.core.memory import ChatMemoryBuffer
 from config import *
+from llama_index.core.memory import ChatMemoryBuffer
 
-# Setup sidebar controls and return configuration.
 def setup_sidebar():
     with st.sidebar:
         st.header("Chat Mode")
-        is_rag_mode = st.toggle(
+        is_rag_mode = st.checkbox(
             'RAG Mode 📚', value=True, 
             help="Toggle between RAG and non-RAG mode"
+        )
+
+        # Model selection
+        st.header("Language Model")
+        llm_model = st.selectbox(
+            "Select the base LLM model:",
+            options=list(LLM_MODELS.keys()),
+            index=list(LLM_MODELS.keys()).index(selected_model)
         )
         
         if is_rag_mode:
@@ -29,24 +36,23 @@ def setup_sidebar():
         st.header("Actions")
         col1, col2 = st.columns(2)
         with col1:
-            st.button('New Chat', on_click = create_new_conversation)
+            st.button('New Chat', on_click=create_new_conversation)
         with col2:
-            st.button('Clear History', on_click = clear_chat_history)
+            st.button('Clear History', on_click=clear_chat_history)
 
     return is_rag_mode, uploaded_files, {'num_ctx': max_length, 'temperature': temperature}
 
 def create_new_conversation():
     st.session_state.messages = [{"role": "assistant", "content": "Hello, I'm your assistant, how can I help you?"}]
     if 'chat_engine' in st.session_state:
-        st.session_state.chat_engine._memory = ChatMemoryBuffer.from_defaults(token_limit = DEFAULT_TOKEN_LIMIT)
+        st.session_state.chat_engine._memory = ChatMemoryBuffer.from_defaults(token_limit=DEFAULT_TOKEN_LIMIT)
         
 def clear_chat_history():
     st.session_state.messages = [{"role": "assistant", "content": "Hello, I'm your assistant, how can I help you?"}]
 
-# Display chat messages from history and display chat input field at the bottom.
 def display_chat():
     for message in st.session_state.messages:
-        with st.chat_message(message['role'], avatar=message.get('avatar')):
+        with st.chat_message(message['role']):
             st.markdown(message['content'])
 
     return st.chat_input("Ask a question:")
