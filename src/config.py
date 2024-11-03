@@ -23,8 +23,8 @@ LLM_MODEL = LLM_MODELS[selected_model]["model_name"]
 LLM_TIMEOUT = LLM_MODELS[selected_model]["timeout"]
 
 # Retrieval configurations
-DEFAULT_NUM_DOCS = 5  # Default number of documents to retrieve
-DEFAULT_SIMILARITY_THRESHOLD = 0.75  # Default similarity threshold
+DEFAULT_NUM_DOCS = 3  # Default number of documents to retrieve
+DEFAULT_SIMILARITY_THRESHOLD = 0.65  # Default similarity threshold
 
 # Supported file types
 SUPPORTED_FILE_TYPES = ["txt", "pdf", "docx"]
