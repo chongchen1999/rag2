@@ -1,0 +1,6 @@
+streamlit
+psutil
+llama-index
+ollama
+collections
+GPUtil
