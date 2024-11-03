@@ -77,12 +77,6 @@ pip install -r requirements.txt
 
 ### Basic Setup
 ```python
-from chatbot import ChatBot
-from config import DEFAULT_CONFIG
-
-# Initialize chatbot
-chatbot = ChatBot(config=DEFAULT_CONFIG)
-
 # Start Streamlit interface
 streamlit run app.py
 ```
@@ -100,7 +94,7 @@ config = {
 
 ## Environment Variables
 ```
-OLLAMA_NUM_PARALLEL=4
+OLLAMA_NUM_PARALLEL=2
 OLLAMA_MAX_LOADED_MODELS=2
 ```
 
